@@ -43,10 +43,12 @@
 #include "Common/Log.h"
 
 
-void NewThreadExecutor::Run(std::function<void()> func) {
-	// Every connection gets a thread, and we only ever joined them at shutdown - so a server that
+bool NewThreadExecutor::Run(std::function<void()> func) {
+	// Every connection gets a thread, and we only ever join them at shutdown - so a server that
 	// had served N connections was still holding N joinable std::threads. Reap the finished ones.
 	Prune();
+	if (workers_.size() >= MAX_WORKERS)
+		return false;
 
 	auto done = std::make_shared<std::atomic<bool>>(false);
 	Worker worker;
@@ -56,6 +58,7 @@ void NewThreadExecutor::Run(std::function<void()> func) {
 		done->store(true, std::memory_order_release);
 	});
 	workers_.push_back(std::move(worker));
+	return true;
 }
 
 void NewThreadExecutor::Prune() {
@@ -328,7 +331,8 @@ bool Server::RunSlice(double timeout) {
 	socklen_t client_addr_size = sizeof(client_addr);
 	int conn_fd = accept(listenerSock_, &client_addr.sa, &client_addr_size);
 	if (conn_fd >= 0) {
-		executor_->Run(std::bind(&Server::HandleConnection, this, conn_fd));
+		if (!executor_->Run(std::bind(&Server::HandleConnection, this, conn_fd)))
+			closesocket(conn_fd);
 		return true;
 	}
 	else {

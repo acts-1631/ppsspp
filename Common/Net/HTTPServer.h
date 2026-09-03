@@ -13,7 +13,7 @@
 class NewThreadExecutor {
 public:
 	~NewThreadExecutor();
-	void Run(std::function<void()> func);
+	bool Run(std::function<void()> func);
 
 private:
 	// Reap threads that have finished. Only called from the thread that calls Run().
@@ -28,6 +28,10 @@ private:
 		// the thread is joined.
 		std::shared_ptr<std::atomic<bool>> done;
 	};
+	// Requests use HTTP/1.0 and close after one response. This leaves ample
+	// concurrency for browsers and the debugger while bounding thread stacks
+	// on low-memory and 32-bit targets.
+	static constexpr size_t MAX_WORKERS = 32;
 	std::vector<Worker> workers_;
 };
 
